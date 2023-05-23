@@ -78,12 +78,14 @@ namespace IdsMLNet_Research.Services
             }
         }
 
-        internal static void CreateSampledDataSet(string truthFileLocation, ESampleStrategy strategy, string newFileLocation, string? newFileLocation2, string? newFileLocation3, string? newFileLocation4)
+        internal static void CreateSampledDataSet(string truthFileLocation, ESampleStrategy strategy, string newFileLocation, string newFileLocation2)
         {
             var config = new CsvConfiguration(CultureInfo.InvariantCulture)
             {
                 HasHeaderRecord = false
             };
+
+            var cursorTop = GetInitialCursor(strategy);
 
             var totalCount = 0;
             var totalRedTeamsAdded = 0;
@@ -94,20 +96,12 @@ namespace IdsMLNet_Research.Services
             var ignoreCount2 = 0;
             var addedCount2 = 0;
 
-            var totalRedTeamsAdded3 = 0;
-            var addedCount3 = 0;
-
-            var totalRedTeamsAdded4 = 0;
-            var ignoreCount4 = 0;
-            var addedCount4 = 0;
             Random rand = new Random();
 
             using (var readerTruth = new StreamReader(truthFileLocation))
             using (var csvTruth = new CsvReader(readerTruth, config))
             using (var fs = new StreamWriter(newFileLocation))
             using (var fs2 = new StreamWriter(newFileLocation2))
-            using (var fs3 = new StreamWriter(newFileLocation3))
-            using (var fs4 = new StreamWriter(newFileLocation4))
             {
                 while (csvTruth.Read())
                 {
@@ -116,31 +110,53 @@ namespace IdsMLNet_Research.Services
                     totalCount++;
                     switch (strategy)
                     {
-                        case ESampleStrategy.All:
-                            RedOnlySample(ref totalCount, ref totalRedTeamsAdded, ref ignoreCount, ref addedCount, fs, record);
-                            Day8And9Sample(ref totalCount, ref totalRedTeamsAdded2, ref ignoreCount2, ref addedCount2, fs2, record);
-                            RandomSample(ref totalCount, ref totalRedTeamsAdded3, ref addedCount3, ref totalRedTeamsAdded4, ref ignoreCount4, ref addedCount4, rand, fs3, fs4, record);
-                            break;
                         case ESampleStrategy.Day8And9:
-                            Day8And9Sample(ref totalCount, ref totalRedTeamsAdded, ref ignoreCount, ref addedCount, fs, record);
+                            Day8And9Sample(ref totalRedTeamsAdded, ref ignoreCount, ref addedCount, fs, record);
+                            PrintProgress(cursorTop - 1, strategy, totalCount, totalRedTeamsAdded, ignoreCount, addedCount);
                             break;
                         case ESampleStrategy.RedOnly:
-                            RedOnlySample(ref totalCount, ref totalRedTeamsAdded, ref ignoreCount, ref addedCount, fs, record);
+                            RedOnlySample(ref totalRedTeamsAdded, ref ignoreCount, ref addedCount, fs, record);
+                            PrintProgress(cursorTop - 1, strategy, totalCount, totalRedTeamsAdded, ignoreCount, addedCount);
                             break;
                         case ESampleStrategy.RandomSample:
-                            RandomSample(ref totalCount, ref totalRedTeamsAdded, ref addedCount, ref totalRedTeamsAdded2, ref ignoreCount2, ref addedCount2, rand, fs, fs2, record);
+                            RandomSample(ref totalRedTeamsAdded, ref addedCount, ref totalRedTeamsAdded2, ref ignoreCount2, ref addedCount2, rand, fs, fs2, record);
+                            PrintProgress(cursorTop - 2, strategy, totalCount, totalRedTeamsAdded, 0, addedCount);
+                            PrintProgress(cursorTop - 1, strategy, totalCount, totalRedTeamsAdded2, ignoreCount2, addedCount2);
                             break;
                         default:
                             throw new NotImplementedException();
                     }
                 }
             }
-            
-
-
         }
 
-        private static void Day8And9Sample(ref int totalCount, ref int totalRedTeamsAdded, ref int ignoreCount, ref int addedCount, StreamWriter fs, AuthEventTransform record)
+        private static int GetInitialCursor(ESampleStrategy strategy)
+        {
+            switch (strategy)
+            {
+                case ESampleStrategy.Day8And9:
+                    Console.WriteLine("Line 1");
+                    break;
+                case ESampleStrategy.RedOnly:
+                    Console.WriteLine("Line 1");
+                    break;
+                case ESampleStrategy.RandomSample:
+                    Console.WriteLine("Line 1");
+                    Console.WriteLine("Line 2");
+                    break;
+                default:
+                    throw new NotImplementedException();
+            }
+            return Console.CursorTop;
+        }
+
+        private static void PrintProgress(int cursorPosition, ESampleStrategy strategy, int totalCount, int totalRedTeamsAdded, int ignoreCount, int addedCount)
+        {
+            Console.SetCursorPosition(0, cursorPosition);
+            Console.WriteLine("\r {0}: Total Lines Processed: {1}, Total Ignored: {2}, Total Added: {3}, Total Red Teams: {4}                            ", strategy, totalCount.ToString("N0"), ignoreCount.ToString("N0"), addedCount.ToString("N0"), totalRedTeamsAdded.ToString("N0"));
+        }
+
+        private static void Day8And9Sample(ref int totalRedTeamsAdded, ref int ignoreCount, ref int addedCount, StreamWriter fs, AuthEventTransform record)
         {
             if (record.TimeStamp > 800000 || record.TimeStamp < 700000)
             {
@@ -152,11 +168,9 @@ namespace IdsMLNet_Research.Services
                 addedCount++;
                 if (record.IsRedTeam) totalRedTeamsAdded++;
             }
-
-            Console.WriteLine("\r Day 8 and 9: Total Lines Processed: {0}, Total Ignored: {1}, Total Added: {2}, Total Red Teams: {3}                            ", totalCount.ToString("N0"), ignoreCount.ToString("N0"), addedCount.ToString("N0"), totalRedTeamsAdded.ToString("N0"));
         }
 
-        private static void RedOnlySample(ref int totalCount, ref int totalRedTeamsAdded, ref int ignoreCount, ref int addedCount, StreamWriter fs, AuthEventTransform record)
+        private static void RedOnlySample(ref int totalRedTeamsAdded, ref int ignoreCount, ref int addedCount, StreamWriter fs, AuthEventTransform record)
         {
             if (!record.IsRedTeam)
             {
@@ -168,14 +182,12 @@ namespace IdsMLNet_Research.Services
                 addedCount++;
                 totalRedTeamsAdded++;
             }
-
-            Console.WriteLine("\r RedOnly: Total Lines Processed: {0}, Total Ignored: {1}, Total Added: {2}, Total Red Teams: {3}                            ", totalCount.ToString("N0"), ignoreCount.ToString("N0"), addedCount.ToString("N0"), totalRedTeamsAdded.ToString("N0"));
         }
 
-        private static void RandomSample(ref int totalCount, ref int totalRedTeamsAdded, ref int addedCount, ref int totalRedTeamsAdded2, ref int ignoreCount2, ref int addedCount2, Random rand, StreamWriter fs, StreamWriter fs2, AuthEventTransform? record)
+        private static void RandomSample(ref int totalRedTeamsAdded, ref int addedCount, ref int totalRedTeamsAdded2, ref int ignoreCount2, ref int addedCount2, Random rand, StreamWriter fs, StreamWriter fs2, AuthEventTransform record)
         {
-            var randOverSample = rand.Next(1, 25);
-            var randUnderSample = rand.Next(1, 500000);
+            var randOverSample = rand.Next(1, 31);
+            var randUnderSample = rand.Next(1, 400000);
 
             // Oversample Block
             if (record.IsRedTeam)
@@ -207,9 +219,6 @@ namespace IdsMLNet_Research.Services
             {
                 ignoreCount2++;
             }
-
-            Console.WriteLine("\r DownSample: Total Lines Processed: {0}, Total Ignored: {1}, Total Added: {2}, Total Red Teams: {3}                            ", totalCount.ToString("N0"), ignoreCount2.ToString("N0"), addedCount2.ToString("N0"), totalRedTeamsAdded2.ToString("N0"));
-            Console.WriteLine("\r OverSample: Total Lines Processed: {0}, Total Ignored: 0, Total Added: {2}, Total Red Teams: {3}                            ", totalCount.ToString("N0"), addedCount.ToString("N0"), totalRedTeamsAdded.ToString("N0"));
         }
 
         private static bool RedTeamContainsRecord(List<RedEvent> redTeams, AuthEvent record)

@@ -14,6 +14,6 @@ const string _truthFileRedOnly = @"C:\Users\itali\source\repos\IdsMLNet_Research
 const string _truthFile89 = @"C:\Users\itali\source\repos\IdsMLNet_Research\IdsMLNet_Research\Data\truth89.txt";
 
 
-LargeParserService.CreateBaseTruth(_authFileLocation, _redTeamFileLocation, _truthFileLocation, _finalTestDataLocation);
+//LargeParserService.CreateBaseTruth(_authFileLocation, _redTeamFileLocation, _truthFileLocation, _finalTestDataLocation);
 
-LargeParserService.CreateSampledDataSet(_truthFileLocation, ESampleStrategy.All, _truthFileRedOnly, _truthFile89, _truthFileLocationRandomUpSample, _truthFileLocationRandomDownSample);
+LargeParserService.CreateSampledDataSet(_truthFileLocation, ESampleStrategy.RandomSample, _truthFileLocationRandomUpSample, _truthFileLocationRandomDownSample);
