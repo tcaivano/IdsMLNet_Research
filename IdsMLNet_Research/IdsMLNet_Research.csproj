@@ -11,6 +11,7 @@
     <PackageReference Include="Microsoft.ML.TorchSharp" Version="0.20.1" />
   </ItemGroup>
   <ItemGroup Label="IdsModel">
+    <None Include="..\.editorconfig" Link=".editorconfig" />
     <None Include="IdsModel.mlnet">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

@@ -8,6 +8,13 @@ namespace IdsMLNet_Research.Services
 {
     public static class LargeParserService
     {
+        /// <summary>
+        /// Creates a base truth file from the original auth.txt file. Removes Incomplete records, determines Red Team data, and creates a cleaned output.
+        /// </summary>
+        /// <param name="authFileLocation">File location of auth.txt</param>
+        /// <param name="redTeamFileLocation">File location of redteam.txt</param>
+        /// <param name="newTruthFileLocation">Transformed file to be created</param>
+        /// <param name="finalTestDataLocation">Validation data file to be created</param>
         public static void CreateBaseTruth(string authFileLocation, string redTeamFileLocation, string newTruthFileLocation, string finalTestDataLocation)
         {
             var config = new CsvConfiguration(CultureInfo.InvariantCulture)
@@ -78,7 +85,15 @@ namespace IdsMLNet_Research.Services
             }
         }
 
-        internal static void CreateSampledDataSet(string truthFileLocation, ESampleStrategy strategy, string newFileLocation, string newFileLocation2)
+        /// <summary>
+        /// Creates a new sampled dataset file from a specified ESampleStrategy.
+        /// </summary>
+        /// <param name="truthFileLocation">The base truth file to sample.</param>
+        /// <param name="strategy">The sampling strategy to use</param>
+        /// <param name="newFileLocation">The new file to be created</param>
+        /// <param name="newFileLocation2"></param>
+        /// <exception cref="NotImplementedException">Thrown for unimplemented ESampleStrategy cases.</exception>
+        public static void CreateSampledDataSet(string truthFileLocation, ESampleStrategy strategy, string newFileLocation, string newFileLocation2)
         {
             var config = new CsvConfiguration(CultureInfo.InvariantCulture)
             {
@@ -130,6 +145,33 @@ namespace IdsMLNet_Research.Services
             }
         }
 
+        /// <summary>
+        /// Retrieves authentication events from a CSV file and returns a list of AuthEventTransform objects.
+        /// </summary>
+        /// <param name="fileLocation">The location of the CSV file.</param>
+        /// <returns>A list of AuthEventTransform objects containing the authentication events.</returns>
+        public static List<AuthEventTransform> GetAuthEventsFromFile(string fileLocation)
+        {
+            List<AuthEventTransform> authEvents;
+            var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+            {
+                HasHeaderRecord = false
+            };
+
+            using (var fileReader = new StreamReader(fileLocation))
+            using (var csvTruth = new CsvReader(fileReader, config))
+            {
+                authEvents = csvTruth.GetRecords<AuthEventTransform>().ToList();
+            }
+            return authEvents;
+        }
+
+        /// <summary>
+        /// Gets the initial Console Cursor depending on the strategy. Delete when RandomSample is refactored.
+        /// </summary>
+        /// <param name="strategy"></param>
+        /// <returns></returns>
+        /// <exception cref="NotImplementedException"></exception>
         private static int GetInitialCursor(ESampleStrategy strategy)
         {
             switch (strategy)
@@ -150,11 +192,15 @@ namespace IdsMLNet_Research.Services
             return Console.CursorTop;
         }
 
+        /// <summary>
+        /// Prints the current sampling progress to the console.
+        /// </summary>
         private static void PrintProgress(int cursorPosition, ESampleStrategy strategy, int totalCount, int totalRedTeamsAdded, int ignoreCount, int addedCount)
         {
             Console.SetCursorPosition(0, cursorPosition);
             Console.WriteLine("\r {0}: Total Lines Processed: {1}, Total Ignored: {2}, Total Added: {3}, Total Red Teams: {4}                            ", strategy, totalCount.ToString("N0"), ignoreCount.ToString("N0"), addedCount.ToString("N0"), totalRedTeamsAdded.ToString("N0"));
         }
+
 
         private static void Day8And9Sample(ref int totalRedTeamsAdded, ref int ignoreCount, ref int addedCount, StreamWriter fs, AuthEventTransform record)
         {

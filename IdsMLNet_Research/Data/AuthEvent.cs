@@ -30,6 +30,10 @@ namespace IdsMLNet_Research.Data
         [Ignore]
         public bool IsRedTeam { get; set; }
 
+        /// <summary>
+        /// Indicates if the record has any missing fields.
+        /// </summary>
+        /// <returns>True if any fields are equal to ?</returns>
         public bool IsComplete()
         {
             return !(new[] { SourceUser, DestinationUser, SourceComputer, DestinationComputer, AuthenticationType, LogonType, AuthenticationOrientation }).Any(x => x != null && x.Equals("?"));
