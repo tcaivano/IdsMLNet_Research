@@ -3,6 +3,7 @@ using CsvHelper;
 using IdsMLNet_Research.Data;
 using IdsMLNet_Research.Enum;
 using System.Globalization;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace IdsMLNet_Research.Services
 {
@@ -150,9 +151,9 @@ namespace IdsMLNet_Research.Services
         /// </summary>
         /// <param name="fileLocation">The location of the CSV file.</param>
         /// <returns>A list of AuthEventTransform objects containing the authentication events.</returns>
-        public static List<AuthEventTransform> GetAuthEventsFromFile(string fileLocation)
+        public static AuthEventTransform[] GetAuthEventsFromFile(string fileLocation)
         {
-            List<AuthEventTransform> authEvents;
+            AuthEventTransform[] authEvents;
             var config = new CsvConfiguration(CultureInfo.InvariantCulture)
             {
                 HasHeaderRecord = false
@@ -161,7 +162,7 @@ namespace IdsMLNet_Research.Services
             using (var fileReader = new StreamReader(fileLocation))
             using (var csvTruth = new CsvReader(fileReader, config))
             {
-                authEvents = csvTruth.GetRecords<AuthEventTransform>().ToList();
+                authEvents = csvTruth.GetRecords<AuthEventTransform>().ToArray();
             }
             return authEvents;
         }
