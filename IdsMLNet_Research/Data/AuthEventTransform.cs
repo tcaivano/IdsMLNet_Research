@@ -41,10 +41,6 @@ namespace IdsMLNet_Research.Data
         [LoadColumn(8)]
         public bool IsRedTeam { get; set; }
 
-        public class AuthEventPrediction
-        {
-            public bool IsRedTeam { get; set; }
-        }
 
         /// <summary>
         /// Calculates the Euclidean distance between two AuthEventTransform objects based on various attribute comparisons.
