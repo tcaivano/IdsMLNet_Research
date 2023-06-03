@@ -3,19 +3,22 @@ using IdsMLNet_Research.Data;
 using Microsoft.ML.Trainers.FastTree;
 using Microsoft.ML.Data;
 using Microsoft.ML.Calibrators;
+using IdsMLNet_Research.Enum;
 
 namespace IdsMLNet_Research.Services
 {
     public static class TrainingService
     {
         /// <summary>
-        /// Trains a FastTree binary classification model using the provided truth file and test file.
+        /// Trains a binary classification model using the provided truth file and test file, with the given trainer
         /// </summary>
         /// <param name="truthFileLocation">The file location of the truth data used for training.</param>
         /// <param name="testFileLocation">The file location of the test data used for evaluation.</param>
         /// <param name="backupFileLocation">The backup file location to save the trained model.</param>
-        /// <param name="modelName">The name of the model.</param>
-        public static void TrainNetworkFastTree(string truthFileLocation, string testFileLocation, string backupFileLocation, string modelName)
+        /// <param name="modelName">The name of the model.</param>"
+        /// <param name="trainer">The trainer to use</param>
+        /// <param name="saveModel">Indicates if the file should be saved</param>
+        public static void TrainNetwork(string truthFileLocation, string testFileLocation, string backupFileLocation, string modelName, ETrainer trainer, bool saveModel = false)
         {
             // Prepare
             MLContext mlContext = new MLContext() { GpuDeviceId = 0, FallbackToCpu = false };
@@ -30,15 +33,59 @@ namespace IdsMLNet_Research.Services
             };
 
             // Create Pipeline
-            var pipeline = mlContext.Transforms.Text.FeaturizeText("SourceUserEncoded", "SourceUser")
+            IEstimator<ITransformer> pipeline = mlContext.Transforms.Text.FeaturizeText("SourceUserEncoded", "SourceUser")
                 .Append(mlContext.Transforms.Text.FeaturizeText("DestinationUserEncoded", "DestinationUser"))
                 .Append(mlContext.Transforms.Text.FeaturizeText("SourceComputerEncoded", "SourceComputer"))
                 .Append(mlContext.Transforms.Text.FeaturizeText("DestinationComputerEncoded", "DestinationComputer"))
                 .Append(mlContext.Transforms.Text.FeaturizeText("LogonTypeEncoded", "LogonType"))
                 .Append(mlContext.Transforms.Categorical.OneHotEncoding("AuthenticationOrientationEncoded", "AuthenticationOrientation"))
                 .Append(mlContext.Transforms.Categorical.OneHotEncoding("IsSuccessfulEncoded", "IsSuccessful"))
-                .Append(mlContext.Transforms.Concatenate("Features", "SourceUserEncoded", "DestinationUserEncoded", "SourceComputerEncoded", "LogonTypeEncoded", "AuthenticationOrientationEncoded", "IsSuccessfulEncoded"))
-                .Append(mlContext.BinaryClassification.Trainers.FastTree(options));
+                .Append(mlContext.Transforms.Concatenate("Features", "SourceUserEncoded", "DestinationUserEncoded", "SourceComputerEncoded", "LogonTypeEncoded", "AuthenticationOrientationEncoded", "IsSuccessfulEncoded"));
+
+            switch (trainer)
+            {
+                case ETrainer.FastTree:
+                    pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.FastTree(options));
+                    break;
+                case ETrainer.SdcaLogisticRegression:
+                    pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.SdcaLogisticRegression(labelColumnName: "IsRedTeam"));
+                    break;
+                case ETrainer.AveragedPerceptron:
+                    pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.AveragedPerceptron(labelColumnName: "IsRedTeam"));
+                    break;
+                case ETrainer.FastForest:
+                    pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.FastForest(labelColumnName: "IsRedTeam"));
+                    break;
+                case ETrainer.FieldAwareFactorizationMachine:
+                    pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.FieldAwareFactorizationMachine(labelColumnName: "IsRedTeam"));
+                    break;
+                case ETrainer.Gam:
+                    pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.Gam(labelColumnName: "IsRedTeam"));
+                    break;
+                case ETrainer.LbfgsLogisticRegression:
+                    pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.LbfgsLogisticRegression(labelColumnName: "IsRedTeam"));
+                    break;
+                case ETrainer.LdSvm:
+                    pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.LdSvm(labelColumnName: "IsRedTeam"));
+                    break;
+                case ETrainer.LinearSvm:
+                    pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.LinearSvm(labelColumnName: "IsRedTeam"));
+                    break;
+                case ETrainer.Prior:
+                    pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.Prior(labelColumnName: "IsRedTeam"));
+                    break;
+                case ETrainer.SdcaNonCalibrated:
+                    pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.SdcaNonCalibrated(labelColumnName: "IsRedTeam"));
+                    break;
+                case ETrainer.SgdCalibrated:
+                    pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.SgdCalibrated(labelColumnName: "IsRedTeam"));
+                    break;
+                case ETrainer.SgdNonCalibrated:
+                    pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.SgdNonCalibrated(labelColumnName: "IsRedTeam"));
+                    break;
+                default:
+                    throw new NotImplementedException();
+            }
 
             // Fit
             DateTime now = GetNowAndDisplay();
@@ -51,49 +98,8 @@ namespace IdsMLNet_Research.Services
             DisplayTrainingMetrics(trainedModel, metrics);
 
             // Save
-            SaveModel(backupFileLocation, modelName, mlContext, trainingdata, now, trainedModel);
+            if (saveModel) SaveModel(backupFileLocation, modelName, mlContext, trainingdata, now, trainedModel);
         }
-
-        /// <summary>
-        /// Trains an SDCA Logistic Regression binary classification model using the provided truth file and test file.
-        /// </summary>
-        /// <param name="truthFileLocation">The file location of the truth data used for training.</param>
-        /// <param name="testFileLocation">The file location of the test data used for evaluation.</param>
-        /// <param name="backupFileLocation">The backup file location to save the trained model.</param>
-        /// <param name="modelName">The name of the model.</param>
-
-        public static void TrainNetworkSdcaLogReg(string truthFileLocation, string testFileLocation, string backupFileLocation, string modelName)
-        {
-            // Prepare
-            MLContext mlContext = new MLContext() { GpuDeviceId = 0, FallbackToCpu = false };
-            IDataView trainingdata = mlContext.Data.LoadFromTextFile<AuthEventTransform>(truthFileLocation, hasHeader: false, separatorChar: ',');
-            IDataView testDataView = mlContext.Data.LoadFromTextFile<AuthEventTransform>(testFileLocation, hasHeader: false, separatorChar: ',');
-
-            // Create Pipeline
-            var pipeline = mlContext.Transforms.Text.FeaturizeText("SourceUserEncoded", "SourceUser")
-                .Append(mlContext.Transforms.Text.FeaturizeText("DestinationUserEncoded", "DestinationUser"))
-                .Append(mlContext.Transforms.Text.FeaturizeText("SourceComputerEncoded", "SourceComputer"))
-                .Append(mlContext.Transforms.Text.FeaturizeText("DestinationComputerEncoded", "DestinationComputer"))
-                .Append(mlContext.Transforms.Text.FeaturizeText("LogonTypeEncoded", "LogonType"))
-                .Append(mlContext.Transforms.Categorical.OneHotEncoding("AuthenticationOrientationEncoded", "AuthenticationOrientation"))
-                .Append(mlContext.Transforms.Categorical.OneHotEncoding("IsSuccessfulEncoded", "IsSuccessful"))
-                .Append(mlContext.Transforms.Concatenate("Features", "SourceUserEncoded", "DestinationUserEncoded", "SourceComputerEncoded", "LogonTypeEncoded", "AuthenticationOrientationEncoded", "IsSuccessfulEncoded"))
-                .Append(mlContext.BinaryClassification.Trainers.SdcaLogisticRegression("IsRedTeam", "Features"));
-
-            // Fit
-            DateTime now = GetNowAndDisplay();
-            var trainedModel = pipeline.Fit(trainingdata);
-            DisplayTrainingEnd(now);
-
-            // Evaluate
-            var predictions = trainedModel.Transform(testDataView);
-            var metrics = mlContext.BinaryClassification.EvaluateNonCalibrated(predictions, "IsRedTeam");
-            DisplayTrainingMetrics(trainedModel, metrics);
-
-            // Save
-            SaveModel(backupFileLocation, modelName, mlContext, trainingdata, now, trainedModel);
-        }
-
 
         /// <summary>
         /// Displays the training metrics of the trained model.
