@@ -74,12 +74,18 @@ namespace IdsMLNet_Research.Data
             x7 = Convert.ToInt16(a1.IsSuccessful != a2.IsSuccessful);
 
             // Is Red Team Comparison
-            x8 = Convert.ToInt16(a1.IsRedTeam != a2.IsRedTeam);
+            x8 = Convert.ToInt16(a1.IsRedTeam != a2.IsRedTeam) * 2;
 
             return Math.Sqrt(Math.Pow(x1, 2) + Math.Pow(x2, 2) + Math.Pow(x3, 2) + Math.Pow(x4, 2) + Math.Pow(x5, 2) + Math.Pow(x6, 2) + Math.Pow(x7, 2) + Math.Pow(x8, 2));
         }
 
-
+        /// <summary>
+        /// Gets the k-nearest neighbors of an AuthEventTransform instance in a given dataset based on Euclidean distance.
+        /// </summary>
+        /// <param name="a">The AuthEventTransform instance for which to find the nearest neighbors.</param>
+        /// <param name="dataSet">The array of AuthEventTransform instances representing the dataset.</param>
+        /// <param name="k">The number of nearest neighbors to retrieve.</param>
+        /// <returns>A list of tuples containing the nearest neighbors and their corresponding distances.</returns>
         public static List<Tuple<AuthEventTransform, double>> GetNearestNeighbors(AuthEventTransform a, AuthEventTransform[] dataSet, int k)
         {
             List<Tuple<AuthEventTransform, double>> result = new List<Tuple<AuthEventTransform, double>>();
@@ -94,6 +100,13 @@ namespace IdsMLNet_Research.Data
             return result.OrderBy(x => x.Item2).Take(k).ToList();
         }
 
+        /// <summary>
+        /// Gets the k-nearest neighbors of an AuthEventTransform instance in a dataset loaded from a file based on Euclidean distance.
+        /// </summary>
+        /// <param name="a">The AuthEventTransform instance for which to find the nearest neighbors.</param>
+        /// <param name="dataSetLocation">The location of the dataset file.</param>
+        /// <param name="k">The number of nearest neighbors to retrieve.</param>
+        /// <returns>A list of tuples containing the nearest neighbors and their corresponding distances.</returns>
         public static List<Tuple<AuthEventTransform, double>> GetNearestNeighbors(AuthEventTransform a, string dataSetLocation, int k)
         {
             List<Tuple<AuthEventTransform, double>> result = new List<Tuple<AuthEventTransform, double>>();
@@ -127,6 +140,12 @@ namespace IdsMLNet_Research.Data
             return result.OrderBy(x => x.Item2).Take(k).ToList();
         }
 
+        /// <summary>
+        /// Calculates the string distance between two strings in a tuple format.
+        /// </summary>
+        /// <param name="a1">The first string of the tuple.</param>
+        /// <param name="a2">The second string of the tuple.</param>
+        /// <returns>The string distance between the two strings.</returns>
         private static int GetTupleStringDistance(string a1, string a2)
         {
             int result;

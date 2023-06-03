@@ -7,9 +7,9 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="CsvHelper" Version="30.0.1" />
-    <PackageReference Include="Microsoft.ML" Version="2.0.1" />
-    <PackageReference Include="Microsoft.ML.FastTree" Version="2.0.1" />
-    <PackageReference Include="Microsoft.ML.TorchSharp" Version="0.20.1" />
+    <PackageReference Include="Microsoft.ML" Version="3.0.0-preview.23266.6" />
+    <PackageReference Include="Microsoft.ML.FastTree" Version="3.0.0-preview.23266.6" />
+    <PackageReference Include="Microsoft.ML.TorchSharp" Version="0.21.0-preview.23266.6" />
     <PackageReference Include="TorchSharp-cuda-windows" Version="0.100.0" />
   </ItemGroup>
   <ItemGroup Label="IdsModel">

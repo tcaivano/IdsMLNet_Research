@@ -10,6 +10,9 @@
         Demo, // Testing only.
         Day8And9, // Data from days 8 and 9 of the study
         RedOnly, // Red Team Events only
-        RandomSample // Naive sampler
+        RandomSample, // Naive sampler
+        SMOTE,
+        RandomUpSample,
+        RandomDownSample
     }
 }

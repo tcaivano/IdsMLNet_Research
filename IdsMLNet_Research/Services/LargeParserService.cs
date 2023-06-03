@@ -91,33 +91,42 @@ namespace IdsMLNet_Research.Services
         /// </summary>
         /// <param name="truthFileLocation">The base truth file to sample.</param>
         /// <param name="strategy">The sampling strategy to use</param>
-        /// <param name="newFileLocation">The new file to be created</param>
-        /// <param name="newFileLocation2"></param>
+        /// <param name="newFiles">The files to be used</param>
         /// <exception cref="NotImplementedException">Thrown for unimplemented ESampleStrategy cases.</exception>
-        public static void CreateSampledDataSet(string truthFileLocation, ESampleStrategy strategy, string newFileLocation, string newFileLocation2)
+        public static void CreateSampledDataSet(string truthFileLocation, ESampleStrategy strategy, List<string> newFiles)
+        {
+            if (strategy == ESampleStrategy.SMOTE)
+            {
+                GenerateSMOTEPoints(truthFileLocation, newFiles);
+            }
+            else
+            {
+                GenerateLinearSample(truthFileLocation, strategy, newFiles.First());
+            }
+        }
+
+        /// <summary>
+        /// Generates a linear sample from a truth file based on the specified sampling strategy and saves it to a new file location.
+        /// </summary>
+        /// <param name="truthFileLocation">The location of the truth file.</param>
+        /// <param name="strategy">The sampling strategy to use.</param>
+        /// <param name="newFileLocation">The new file location to save the generated sample.</param>
+        private static void GenerateLinearSample(string truthFileLocation, ESampleStrategy strategy, string newFileLocation)
         {
             var config = new CsvConfiguration(CultureInfo.InvariantCulture)
             {
                 HasHeaderRecord = false
             };
 
-            var cursorTop = GetInitialCursor(strategy);
-
+            Random rand = new Random();
             var totalCount = 0;
             var totalRedTeamsAdded = 0;
             var ignoreCount = 0;
             var addedCount = 0;
 
-            var totalRedTeamsAdded2 = 0;
-            var ignoreCount2 = 0;
-            var addedCount2 = 0;
-
-            Random rand = new Random();
-
             using (var readerTruth = new StreamReader(truthFileLocation))
             using (var csvTruth = new CsvReader(readerTruth, config))
             using (var fs = new StreamWriter(newFileLocation))
-            using (var fs2 = new StreamWriter(newFileLocation2))
             {
                 while (csvTruth.Read())
                 {
@@ -128,21 +137,118 @@ namespace IdsMLNet_Research.Services
                     {
                         case ESampleStrategy.Day8And9:
                             Day8And9Sample(ref totalRedTeamsAdded, ref ignoreCount, ref addedCount, fs, record);
-                            PrintProgress(cursorTop - 1, strategy, totalCount, totalRedTeamsAdded, ignoreCount, addedCount);
+                            PrintProgress(strategy, totalCount, totalRedTeamsAdded, ignoreCount, addedCount);
                             break;
                         case ESampleStrategy.RedOnly:
                             RedOnlySample(ref totalRedTeamsAdded, ref ignoreCount, ref addedCount, fs, record);
-                            PrintProgress(cursorTop - 1, strategy, totalCount, totalRedTeamsAdded, ignoreCount, addedCount);
+                            PrintProgress(strategy, totalCount, totalRedTeamsAdded, ignoreCount, addedCount);
                             break;
-                        case ESampleStrategy.RandomSample:
-                            RandomSample(ref totalRedTeamsAdded, ref addedCount, ref totalRedTeamsAdded2, ref ignoreCount2, ref addedCount2, rand, fs, fs2, record);
-                            PrintProgress(cursorTop - 2, strategy, totalCount, totalRedTeamsAdded, 0, addedCount);
-                            PrintProgress(cursorTop - 1, strategy, totalCount, totalRedTeamsAdded2, ignoreCount2, addedCount2);
+                        case ESampleStrategy.RandomUpSample:
+                            RandomSampleUp(ref totalRedTeamsAdded, ref addedCount, rand, fs, record);
+                            PrintProgress(strategy, totalCount, totalRedTeamsAdded, 0, addedCount);
+                            break;
+                        case ESampleStrategy.RandomDownSample:
+                            RandomSampleDown(ref totalRedTeamsAdded, ref ignoreCount, ref addedCount, rand, fs, record);
+                            PrintProgress(strategy, totalCount, totalRedTeamsAdded, 0, addedCount);
                             break;
                         default:
                             throw new NotImplementedException();
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// Generates SMOTE points based on the truth file and a list of new file locations. Saves the SMOTE points to the new files.
+        /// </summary>
+        /// <param name="truthFileLocation">The location of the truth file.</param>
+        /// <param name="newFiles">A list of new file locations to save the generated SMOTE points.</param>
+        private static void GenerateSMOTEPoints(string truthFileLocation, List<string> newFiles)
+        {
+            var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+            {
+                HasHeaderRecord = false
+            };
+
+            Random rand = new Random();
+            var newFileLocation = newFiles[0];
+            var redTeamFileLocation = newFiles[1];
+
+            File.Copy(truthFileLocation, newFileLocation);
+
+            var redTeams = GetAuthEventsFromFile(redTeamFileLocation);
+            List<AuthEventTransform> smotedPoints = new List<AuthEventTransform>();
+
+            foreach (var redTeamEvent in redTeams)
+            {
+                var neighbors = AuthEventTransform.GetNearestNeighbors(redTeamEvent, redTeams, 11).Where(x => x.Item2 != 0).ToArray();
+                var randomIndex = rand.Next(0, neighbors.Length);
+                var randomNearestNeighbor = neighbors[randomIndex].Item1;
+
+                var smoteAuthEvent = GetRandomProperties(redTeamEvent, randomNearestNeighbor, rand);
+                smotedPoints.Add(smoteAuthEvent);
+            }
+
+            var totalCount = 0;
+            var totalRedTeamsAdded = 0;
+
+            using (StreamWriter sw = File.AppendText(newFileLocation))
+            {
+                sw.WriteLine('\n');
+                foreach (var smoteNew in smotedPoints)
+                {
+                    AddRecord(sw, smoteNew);
+                    PrintProgress(ESampleStrategy.SMOTE, totalCount++, totalRedTeamsAdded++, 0, totalCount);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Generates random properties for creating a new AuthEventTransform based on a red team event and its random nearest neighbor.
+        /// </summary>
+        /// <param name="redTeamEvent">The red team event.</param>
+        /// <param name="randomNearestNeighbor">The random nearest neighbor of the red team event.</param>
+        /// <param name="rand">The random number generator.</param>
+        /// <returns>A new AuthEventTransform with random properties.</returns>
+        private static AuthEventTransform GetRandomProperties(AuthEventTransform redTeamEvent, AuthEventTransform randomNearestNeighbor, Random rand)
+        {
+            var newAuthEvent = new AuthEventTransform();
+
+            newAuthEvent.SourceComputer = GetRandomProperty(redTeamEvent.SourceComputer, randomNearestNeighbor.SourceComputer, rand);
+            newAuthEvent.DestinationComputer = GetRandomProperty(redTeamEvent.DestinationComputer, randomNearestNeighbor.DestinationComputer, rand);
+            newAuthEvent.LogonType = GetRandomProperty(redTeamEvent.LogonType, randomNearestNeighbor.LogonType, rand);
+            newAuthEvent.AuthenticationOrientation = GetRandomProperty(redTeamEvent.AuthenticationOrientation, randomNearestNeighbor.AuthenticationOrientation, rand);
+            newAuthEvent.IsSuccessful = GetRandomProperty(redTeamEvent.IsSuccessful, randomNearestNeighbor.IsSuccessful, rand);
+            newAuthEvent.IsRedTeam = GetRandomProperty(redTeamEvent.IsRedTeam, randomNearestNeighbor.IsRedTeam, rand);
+
+            var a1s = redTeamEvent.SourceUser.Split('@');
+            var a2s = randomNearestNeighbor.SourceUser.Split('@');
+            newAuthEvent.SourceUser = GetRandomProperty(a1s[0], a2s[0], rand) + "@" + GetRandomProperty(a1s[1], a2s[1], rand);
+
+            var b1s = redTeamEvent.DestinationUser.Split('@');
+            var b2s = randomNearestNeighbor.DestinationUser.Split('@');
+            newAuthEvent.DestinationUser = GetRandomProperty(b1s[0], b2s[0], rand) + "@" + GetRandomProperty(b1s[1], b2s[1], rand);
+
+            return newAuthEvent;
+        }
+
+        /// <summary>
+        /// Gets a random property value between two given values based on a random number generator.
+        /// </summary>
+        /// <typeparam name="T">The type of the property values.</typeparam>
+        /// <param name="a">The first property value.</param>
+        /// <param name="b">The second property value.</param>
+        /// <param name="rand">The random number generator.</param>
+        /// <returns>A random property value between the two given values.</returns>
+        private static T GetRandomProperty<T>(T a, T b, Random rand)
+        {
+            if (rand.Next(2) == 0)
+            {
+                return a;
+            }
+            else
+            {
+                return b;
             }
         }
 
@@ -168,41 +274,21 @@ namespace IdsMLNet_Research.Services
         }
 
         /// <summary>
-        /// Gets the initial Console Cursor depending on the strategy. Delete when RandomSample is refactored.
+        /// Prints the current sampling progress to the console.
         /// </summary>
-        /// <param name="strategy"></param>
-        /// <returns></returns>
-        /// <exception cref="NotImplementedException"></exception>
-        private static int GetInitialCursor(ESampleStrategy strategy)
+        private static void PrintProgress(ESampleStrategy strategy, int totalCount, int totalRedTeamsAdded, int ignoreCount, int addedCount)
         {
-            switch (strategy)
-            {
-                case ESampleStrategy.Day8And9:
-                    Console.WriteLine("Line 1");
-                    break;
-                case ESampleStrategy.RedOnly:
-                    Console.WriteLine("Line 1");
-                    break;
-                case ESampleStrategy.RandomSample:
-                    Console.WriteLine("Line 1");
-                    Console.WriteLine("Line 2");
-                    break;
-                default:
-                    throw new NotImplementedException();
-            }
-            return Console.CursorTop;
+            Console.Write("\r {0}: Total Lines Processed: {1}, Total Ignored: {2}, Total Added: {3}, Total Red Teams: {4}                            ", strategy, totalCount.ToString("N0"), ignoreCount.ToString("N0"), addedCount.ToString("N0"), totalRedTeamsAdded.ToString("N0"));
         }
 
         /// <summary>
-        /// Prints the current sampling progress to the console.
+        /// Performs the Day8And9 sampling strategy by checking the timestamp of the record. Adds the record to the file if it falls within the specified time range.
         /// </summary>
-        private static void PrintProgress(int cursorPosition, ESampleStrategy strategy, int totalCount, int totalRedTeamsAdded, int ignoreCount, int addedCount)
-        {
-            Console.SetCursorPosition(0, cursorPosition);
-            Console.WriteLine("\r {0}: Total Lines Processed: {1}, Total Ignored: {2}, Total Added: {3}, Total Red Teams: {4}                            ", strategy, totalCount.ToString("N0"), ignoreCount.ToString("N0"), addedCount.ToString("N0"), totalRedTeamsAdded.ToString("N0"));
-        }
-
-
+        /// <param name="totalRedTeamsAdded">The total count of red team events added.</param>
+        /// <param name="ignoreCount">The count of ignored records.</param>
+        /// <param name="addedCount">The count of added records.</param>
+        /// <param name="fs">The StreamWriter to write the record.</param>
+        /// <param name="record">The AuthEventTransform record to process.</param>
         private static void Day8And9Sample(ref int totalRedTeamsAdded, ref int ignoreCount, ref int addedCount, StreamWriter fs, AuthEventTransform record)
         {
             if (record.TimeStamp > 800000 || record.TimeStamp < 700000)
@@ -217,6 +303,14 @@ namespace IdsMLNet_Research.Services
             }
         }
 
+        /// <summary>
+        /// Performs the RedOnly sampling strategy by checking if the record is a red team event. Adds the record to the file if it is a red team event.
+        /// </summary>
+        /// <param name="totalRedTeamsAdded">The total count of red team events added.</param>
+        /// <param name="ignoreCount">The count of ignored records.</param>
+        /// <param name="addedCount">The count of added records.</param>
+        /// <param name="fs">The StreamWriter to write the record.</param>
+        /// <param name="record">The AuthEventTransform record to process.</param>
         private static void RedOnlySample(ref int totalRedTeamsAdded, ref int ignoreCount, ref int addedCount, StreamWriter fs, AuthEventTransform record)
         {
             if (!record.IsRedTeam)
@@ -231,10 +325,47 @@ namespace IdsMLNet_Research.Services
             }
         }
 
-        private static void RandomSample(ref int totalRedTeamsAdded, ref int addedCount, ref int totalRedTeamsAdded2, ref int ignoreCount2, ref int addedCount2, Random rand, StreamWriter fs, StreamWriter fs2, AuthEventTransform record)
+        /// <summary>
+        /// Performs the RandomSampleDown sampling strategy by randomly undersampling non-red team events based on a given probability. Adds the record to the file according to the undersampling rules.
+        /// </summary>
+        /// <param name="totalRedTeamsAdded">The total count of red team events added.</param>
+        /// <param name="ignoreCount">The count of ignored records.</param>
+        /// <param name="addedCount">The count of added records.</param>
+        /// <param name="rand">The random number generator.</param>
+        /// <param name="fs">The StreamWriter to write the record.</param>
+        /// <param name="record">The AuthEventTransform record to process.</param>
+        private static void RandomSampleDown(ref int totalRedTeamsAdded, ref int ignoreCount, ref int addedCount, Random rand, StreamWriter fs, AuthEventTransform record)
+        {
+            var randUnderSample = rand.Next(1, 45000);
+
+            // Undersample Block
+            if (!record.IsRedTeam && randUnderSample == 1)
+            {
+                AddRecord(fs, record);
+                addedCount++;
+            }
+            else if (record.IsRedTeam)
+            {
+                AddRecord(fs, record);
+                totalRedTeamsAdded++;
+            }
+            else
+            {
+                ignoreCount++;
+            }
+        }
+
+        /// <summary>
+        /// Performs the RandomSampleUp sampling strategy by randomly oversampling red team events based on a given probability. Adds the record to the file according to the oversampling rules.
+        /// </summary>
+        /// <param name="totalRedTeamsAdded">The total count of red team events added.</param>
+        /// <param name="addedCount">The count of added records.</param>
+        /// <param name="rand">The random number generator.</param>
+        /// <param name="fs">The StreamWriter to write the record.</param>
+        /// <param name="record">The AuthEventTransform record to process.</param>
+        private static void RandomSampleUp(ref int totalRedTeamsAdded, ref int addedCount, Random rand, StreamWriter fs, AuthEventTransform record)
         {
             var randOverSample = rand.Next(1, 31);
-            var randUnderSample = rand.Next(1, 400000);
 
             // Oversample Block
             if (record.IsRedTeam)
@@ -250,29 +381,24 @@ namespace IdsMLNet_Research.Services
                 AddRecord(fs, record);
             }
             addedCount++;
-
-            // Undersample Block
-            if (!record.IsRedTeam && randUnderSample == 1)
-            {
-                AddRecord(fs2, record);
-                addedCount2++;
-            }
-            else if (record.IsRedTeam)
-            {
-                AddRecord(fs2, record);
-                totalRedTeamsAdded2++;
-            }
-            else
-            {
-                ignoreCount2++;
-            }
         }
 
+        /// <summary>
+        /// Checks if the list of red team events contains a specific AuthEvent record based on matching properties.
+        /// </summary>
+        /// <param name="redTeams">The list of red team events.</param>
+        /// <param name="record">The AuthEvent record to search for.</param>
+        /// <returns>True if the record is found in the red team events list; otherwise, false.</returns>
         private static bool RedTeamContainsRecord(List<RedEvent> redTeams, AuthEvent record)
         {
             return redTeams.Where(x => x.TimeStamp == record.TimeStamp && x.SourceUser == record.SourceUser && x.SourceComputer == record.SourceComputer && x.DestinationComputer == record.DestinationComputer).Any();
         }
 
+        /// <summary>
+        /// Writes an AuthEvent record to a StreamWriter in a specific format.
+        /// </summary>
+        /// <param name="sw">The StreamWriter to write the record.</param>
+        /// <param name="record">The AuthEvent record to write.</param>
         private static void AddRecord(StreamWriter sw, AuthEvent record)
         {
             var isLogon = record.AuthenticationOrientation == "LogOn";
@@ -288,6 +414,12 @@ namespace IdsMLNet_Research.Services
                 + Convert.ToInt32(success) + ","
                 + Convert.ToInt32(record.IsRedTeam));
         }
+
+        /// <summary>
+        /// Writes an AuthEventTransform record to a StreamWriter in a specific format.
+        /// </summary>
+        /// <param name="sw">The StreamWriter to write the record.</param>
+        /// <param name="record">The AuthEventTransform record to write.</param>
         private static void AddRecord(StreamWriter sw, AuthEventTransform record)
         {
             sw.WriteLine(record.TimeStamp + ","
