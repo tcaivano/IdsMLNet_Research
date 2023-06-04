@@ -74,7 +74,7 @@ namespace IdsMLNet_Research.Data
             x7 = Convert.ToInt16(a1.IsSuccessful != a2.IsSuccessful);
 
             // Is Red Team Comparison
-            x8 = Convert.ToInt16(a1.IsRedTeam != a2.IsRedTeam) * 2;
+            x8 = Convert.ToInt16(a1.IsRedTeam != a2.IsRedTeam) * 1;
 
             return Math.Sqrt(Math.Pow(x1, 2) + Math.Pow(x2, 2) + Math.Pow(x3, 2) + Math.Pow(x4, 2) + Math.Pow(x5, 2) + Math.Pow(x6, 2) + Math.Pow(x7, 2) + Math.Pow(x8, 2));
         }
