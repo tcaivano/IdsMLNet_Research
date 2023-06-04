@@ -4,6 +4,7 @@ using Microsoft.ML.Trainers.FastTree;
 using Microsoft.ML.Data;
 using Microsoft.ML.Calibrators;
 using IdsMLNet_Research.Enum;
+using Microsoft.ML.Tokenizers;
 
 namespace IdsMLNet_Research.Services
 {
@@ -18,19 +19,12 @@ namespace IdsMLNet_Research.Services
         /// <param name="modelName">The name of the model.</param>"
         /// <param name="trainer">The trainer to use</param>
         /// <param name="saveModel">Indicates if the file should be saved</param>
-        public static void TrainNetwork(string truthFileLocation, string testFileLocation, string backupFileLocation, string modelName, ETrainer trainer, bool saveModel = false)
+        public static void TrainNetwork(string truthFileLocation, string testFileLocation, ETrainer trainer, bool saveModel = false, string backupFileLocation = @"C:\backup", string modelName = "model")
         {
             // Prepare
             MLContext mlContext = new MLContext() { GpuDeviceId = 0, FallbackToCpu = false };
             IDataView trainingdata = mlContext.Data.LoadFromTextFile<AuthEventTransform>(truthFileLocation, hasHeader: false, separatorChar: ',');
             IDataView testDataView = mlContext.Data.LoadFromTextFile<AuthEventTransform>(testFileLocation, hasHeader: false, separatorChar: ',');
-
-            var options = new FastTreeBinaryTrainer.Options
-            {
-                DiskTranspose = false,
-                LabelColumnName = @"IsRedTeam",
-                FeatureColumnName = @"Features"
-            };
 
             // Create Pipeline
             IEstimator<ITransformer> pipeline = mlContext.Transforms.Text.FeaturizeText("SourceUserEncoded", "SourceUser")
@@ -45,7 +39,7 @@ namespace IdsMLNet_Research.Services
             switch (trainer)
             {
                 case ETrainer.FastTree:
-                    pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.FastTree(options));
+                    pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.FastTree(labelColumnName: "IsRedTeam", learningRate: 0.3));
                     break;
                 case ETrainer.SdcaLogisticRegression:
                     pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.SdcaLogisticRegression(labelColumnName: "IsRedTeam"));
@@ -54,7 +48,7 @@ namespace IdsMLNet_Research.Services
                     pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.AveragedPerceptron(labelColumnName: "IsRedTeam"));
                     break;
                 case ETrainer.FastForest:
-                    pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.FastForest(labelColumnName: "IsRedTeam"));
+                    pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.FastForest(labelColumnName: "IsRedTeam", minimumExampleCountPerLeaf: 20));
                     break;
                 case ETrainer.FieldAwareFactorizationMachine:
                     pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.FieldAwareFactorizationMachine(labelColumnName: "IsRedTeam"));
@@ -63,7 +57,7 @@ namespace IdsMLNet_Research.Services
                     pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.Gam(labelColumnName: "IsRedTeam"));
                     break;
                 case ETrainer.LbfgsLogisticRegression:
-                    pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.LbfgsLogisticRegression(labelColumnName: "IsRedTeam"));
+                    pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.LbfgsLogisticRegression(labelColumnName: "IsRedTeam", optimizationTolerance: 1E-6f));
                     break;
                 case ETrainer.LdSvm:
                     pipeline = pipeline.Append(mlContext.BinaryClassification.Trainers.LdSvm(labelColumnName: "IsRedTeam"));
@@ -95,32 +89,46 @@ namespace IdsMLNet_Research.Services
             // Evaluate
             var predictions = trainedModel.Transform(testDataView);
             var metrics = mlContext.BinaryClassification.EvaluateNonCalibrated(predictions, "IsRedTeam");
-            DisplayTrainingMetrics(trainedModel, metrics);
+            DisplayTrainingMetrics(metrics, trainer, truthFileLocation);
 
             // Save
             if (saveModel) SaveModel(backupFileLocation, modelName, mlContext, trainingdata, now, trainedModel);
         }
 
         /// <summary>
+        /// Evaluates a model from a file.
+        /// </summary>
+        /// <param name="mlFile">The model to evaluate</param>
+        /// <param name="testFileLocation">The test file to evaluate against.</param>
+        public static void Evaluate(string mlFile, string testFileLocation)
+        {
+            MLContext mlContext = new MLContext();
+            IDataView testDataView = mlContext.Data.LoadFromTextFile<AuthEventTransform>(testFileLocation, hasHeader: false, separatorChar: ',');
+
+            // Load trained model
+            ITransformer trainedModel = mlContext.Model.Load(mlFile, out DataViewSchema _);
+
+            // Evaluate
+            var predictions = trainedModel.Transform(testDataView);
+            var metrics = mlContext.BinaryClassification.EvaluateNonCalibrated(predictions, "IsRedTeam");
+            DisplayTrainingMetrics(metrics, ETrainer.None, testFileLocation);
+
+        }
+
+        /// <summary>
         /// Displays the training metrics of the trained model.
         /// </summary>
-        /// <param name="trainedModel">The trained model.</param>
         /// <param name="metrics">The binary classification metrics.</param>
-        private static void DisplayTrainingMetrics(object trainedModel, BinaryClassificationMetrics metrics)
+        /// <param name="set">The training set that was used for training</param>
+        /// <param name="trainer">The trainer set that was used for training</param>
+        private static void DisplayTrainingMetrics(BinaryClassificationMetrics metrics, ETrainer trainer, string set)
         {
             Console.WriteLine("");
-            Console.WriteLine("");
             Console.WriteLine($"************************************************************");
-            Console.WriteLine($"*       Metrics for {trainedModel.ToString()} binary classification model      ");
+            Console.WriteLine($"*       Metrics for {trainer} binary classification model      ");
+            Console.WriteLine($"*       On training set {set}      ");
             Console.WriteLine($"*-----------------------------------------------------------");
-            Console.WriteLine($"*       Accuracy: {metrics.Accuracy:P2}");
-            Console.WriteLine($"*       Area Under Roc Curve:      {metrics.AreaUnderRocCurve:P2}");
-            Console.WriteLine($"*       Area Under PrecisionRecall Curve:  {metrics.AreaUnderPrecisionRecallCurve:P2}");
             Console.WriteLine($"*       F1Score:  {metrics.F1Score:P2}");
-            Console.WriteLine($"*       PositivePrecision:  {metrics.PositivePrecision:#.##}");
-            Console.WriteLine($"*       PositiveRecall:  {metrics.PositiveRecall:#.##}");
-            Console.WriteLine($"*       NegativePrecision:  {metrics.NegativePrecision:#.##}");
-            Console.WriteLine($"*       NegativeRecall:  {metrics.NegativeRecall:P2}");
             Console.WriteLine($"************************************************************");
             Console.WriteLine("");
             Console.WriteLine("");
@@ -133,7 +141,6 @@ namespace IdsMLNet_Research.Services
         private static void DisplayTrainingEnd(DateTime now)
         {
             var end = DateTime.Now;
-            Console.WriteLine($"************************************************************");
             Console.WriteLine($"*      Fit End                                             *");
             Console.WriteLine($"*      End Time: {end}");
             Console.WriteLine($"*      Time Elapsed: {(end - now).TotalSeconds} seconds");
@@ -150,7 +157,6 @@ namespace IdsMLNet_Research.Services
             Console.WriteLine($"************************************************************");
             Console.WriteLine($"*      Fit Start                                           *");
             Console.WriteLine($"*      Start Time: {now}");
-            Console.WriteLine($"************************************************************");
             return now;
         }
 

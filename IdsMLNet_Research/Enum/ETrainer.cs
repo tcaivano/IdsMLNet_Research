@@ -20,6 +20,7 @@ namespace IdsMLNet_Research.Enum
         Prior,
         SdcaNonCalibrated,
         SgdNonCalibrated,
-        SgdCalibrated
+        SgdCalibrated,
+        None
     }
 }

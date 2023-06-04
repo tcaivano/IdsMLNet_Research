@@ -95,13 +95,98 @@ namespace IdsMLNet_Research.Services
         /// <exception cref="NotImplementedException">Thrown for unimplemented ESampleStrategy cases.</exception>
         public static void CreateSampledDataSet(string truthFileLocation, ESampleStrategy strategy, List<string> newFiles)
         {
-            if (strategy == ESampleStrategy.SMOTE)
+            switch(strategy)
             {
-                GenerateSMOTEPoints(truthFileLocation, newFiles);
+                case ESampleStrategy.SMOTE:
+                    GenerateSMOTEPoints(truthFileLocation, newFiles);
+                    break;
+                case ESampleStrategy.ADASYN:
+                    GenerateADASYNPoints(truthFileLocation, newFiles);
+                    break;
+                case ESampleStrategy.CNN:
+
+                    break;
+                default:
+                    GenerateLinearSample(truthFileLocation, strategy, newFiles.First());
+                    break;
             }
-            else
+        }
+
+        /// <summary>
+        /// Generates ADASYN points based on the given truth file and new file locations.
+        /// </summary>
+        /// <param name="truthFileLocation">The location of the truth file.</param>
+        /// <param name="newFiles">A list of new file locations.</param>
+        private static void GenerateADASYNPoints(string truthFileLocation, List<string> newFiles)
+        {
+            const float ml = 9124406f;
+            const float ms = 186f;
+            const float beta = 0.1f;
+            const float k = 10;
+            const float G = (ml - ms) * beta;
+
+            var newFileLocation = newFiles[0];
+            var redTeamFileLocation = newFiles[1];
+            var eventsFileLocation = newFiles[2];
+
+            var redTeams = GetAuthEventsFromFile(redTeamFileLocation);
+            var allEvents = GetAuthEventsFromFile(eventsFileLocation);
+            List<float> rs = new List<float>();
+
+            foreach (var redTeamEvent in redTeams)
             {
-                GenerateLinearSample(truthFileLocation, strategy, newFiles.First());
+                float ri = (float)AuthEventTransform.GetNearestNeighbors(redTeamEvent, allEvents, (int)k).Where(x => x.Item2 != 0 && !x.Item1.IsRedTeam).Count() / k;
+                rs.Add(ri);
+            }
+
+            float riSum = 0;
+            foreach (var r in rs) riSum += r;
+
+            if (riSum == 0) throw new ArithmeticException();
+
+            var riHats = new List<float>();
+            foreach (var ri in rs)
+            {
+                riHats.Add(ri / riSum);
+            }
+
+            var index = 0;
+            List<AuthEventTransform> adasynPoints = new List<AuthEventTransform>();
+            Random rand = new Random();
+            foreach (var redTeamEvent in redTeams)
+            {
+                var Gi = G * riHats[index];
+                // Other redteam data in a neighborhood is really rare, so we will upscale Gi times.
+                if (rs[index] >= 0.9)
+                {
+                    for (int i = 0; i < Math.Round(Gi); i++)
+                    {
+                        adasynPoints.Add(redTeamEvent);
+                    }
+                }
+                else
+                {
+                    var nearestNeighbors = AuthEventTransform.GetNearestNeighbors(redTeamEvent, allEvents, (int)k).Where(x => x.Item2 != 0 && x.Item1.IsRedTeam);
+                    for (int i = 0; i < Math.Round(Gi); i++)
+                    {
+                        var randomNeighbor = nearestNeighbors.OrderBy(x => Guid.NewGuid()).FirstOrDefault();
+                        if (randomNeighbor != null) adasynPoints.Add(GetRandomProperties(redTeamEvent, randomNeighbor.Item1, rand));
+                        else adasynPoints.Add(redTeamEvent);
+                    }
+                }
+                index++;
+            }
+
+            var totalCount = 0;
+            File.Copy(truthFileLocation, newFileLocation);
+            using (StreamWriter sw = File.AppendText(newFileLocation))
+            {
+                sw.WriteLine('\n');
+                foreach (var adasyn in adasynPoints)
+                {
+                    AddRecord(sw, adasyn);
+                    PrintProgress(ESampleStrategy.ADASYN, totalCount++, 0, 0, 0);
+                }
             }
         }
 

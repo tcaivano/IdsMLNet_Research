@@ -13,6 +13,8 @@
         RandomSample, // Naive sampler
         SMOTE,
         RandomUpSample,
-        RandomDownSample
+        RandomDownSample,
+        ADASYN,
+        CNN
     }
 }
