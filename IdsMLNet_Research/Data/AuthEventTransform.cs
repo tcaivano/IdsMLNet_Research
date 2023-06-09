@@ -141,6 +141,17 @@ namespace IdsMLNet_Research.Data
         }
 
         /// <summary>
+        /// Classifiest the AET e based on the KNN algorithm.
+        /// </summary>
+        /// <param name="nearestNeighbors">Points to classify based on</param>
+        /// <returns>Classification</returns>
+        public static bool KnnClassify(List<Tuple<AuthEventTransform, double>> nearestNeighbors)
+        {
+            var nearestNeighborsList = nearestNeighbors.Select(x => x.Item1).ToList();
+            return nearestNeighborsList.Where(x => x.IsRedTeam).Count() > nearestNeighborsList.Where(x => !x.IsRedTeam).Count();
+        }
+
+        /// <summary>
         /// Calculates the string distance between two strings in a tuple format.
         /// </summary>
         /// <param name="a1">The first string of the tuple.</param>

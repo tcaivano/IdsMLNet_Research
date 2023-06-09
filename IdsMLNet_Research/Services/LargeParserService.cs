@@ -104,11 +104,136 @@ namespace IdsMLNet_Research.Services
                     GenerateADASYNPoints(truthFileLocation, newFiles);
                     break;
                 case ESampleStrategy.CNN:
-
+                    GenerateCNNPoints(truthFileLocation, newFiles);
+                    break;
+                case ESampleStrategy.ENN:
+                    GenerateENNPoints(truthFileLocation, newFiles);
                     break;
                 default:
                     GenerateLinearSample(truthFileLocation, strategy, newFiles.First());
                     break;
+            }
+        }
+
+        private static void GenerateCNNPoints(string truthFileLocation, List<string> newFiles)
+        {
+            const int k = 35;
+            if (k % 2 != 1) throw new ArgumentException("k should always be odd");
+
+            Random rand = new Random();
+            var newFileLocation = newFiles[0];
+
+            var events = GetAuthEventsFromFile(truthFileLocation);
+            var startingRed = events.Where(x => x.IsRedTeam).OrderBy(x => Guid.NewGuid()).Take(k/2);
+            var startingNotRed = events.Where(x => !x.IsRedTeam).OrderBy(x => Guid.NewGuid()).Take(k/2);
+            List<AuthEventTransform> cnnSet = new List<AuthEventTransform>
+            {
+                events.OrderBy(x => Guid.NewGuid()).First()
+            };
+            cnnSet.AddRange(startingRed);
+            cnnSet.AddRange(startingNotRed);
+
+            var changesMade = true;
+            int iterations = 1;
+            int totalAdded = 0;
+            int totalRemoved = 0;
+            while (changesMade)
+            {
+                Console.WriteLine($"CNN Iteration {iterations} starting, running total {totalAdded} and {totalRemoved} removed...\t\t\t");
+                changesMade = false;
+                var iterationInteral = 1;
+                var iterationInteralAdded = 0;
+                var iterationInteralRemoved = 0;
+                foreach (var e in events)
+                {
+                    Console.Write($"\rInteral iteration {iterationInteral}, {iterationInteralAdded} added and {iterationInteralRemoved} removed.......\t\t\t");
+                    var nearestNeighbors = AuthEventTransform.GetNearestNeighbors(e, cnnSet.ToArray(), k).ToList();
+                    bool classification = AuthEventTransform.KnnClassify(nearestNeighbors);
+
+                    if (classification != e.IsRedTeam)
+                    {
+                        var nearestNeighborsOriginal = AuthEventTransform.GetNearestNeighbors(e, events.ToArray(), events.Length - 1).ToList();
+                        nearestNeighborsOriginal = nearestNeighborsOriginal.Where(x => x.Item1.IsRedTeam == e.IsRedTeam).Where(x => !cnnSet.Contains(x.Item1)).ToList();
+                        var itemToAdd = nearestNeighborsOriginal.FirstOrDefault();
+
+                        if (itemToAdd != null)
+                        {
+                            cnnSet.Add(itemToAdd.Item1);
+                            changesMade = true;
+                            totalAdded++;
+                            iterationInteralAdded++;
+                        }
+                    }
+                    else
+                    {
+                        totalRemoved++;
+                        iterationInteralRemoved++;
+                    }
+                    iterationInteral++;
+                }
+                iterations++;
+            }
+            Console.WriteLine();
+            Console.WriteLine($"CNN Iteration {iterations} finished, running total {totalAdded} and {totalRemoved} removed...\t\t\t");
+
+            var totalCount = 0;
+            using (StreamWriter sw = File.AppendText(newFileLocation))
+            {
+                foreach (var cnn in cnnSet)
+                {
+                    AddRecord(sw, cnn);
+                    PrintProgress(ESampleStrategy.CNN, totalCount++, 0, 0, 0);
+                }
+            }
+        }
+
+        private static void GenerateENNPoints(string truthFileLocation, List<string> args)
+        {
+            int k = int.Parse(args[1]);
+            if (k % 2 != 1) throw new ArgumentException("k should always be odd");
+
+            Random rand = new Random();
+            var newFileLocation = args[0];
+
+            var events = GetAuthEventsFromFile(truthFileLocation);
+            var startingRed = events.Where(x => x.IsRedTeam).OrderBy(x => Guid.NewGuid()).Take(k / 2);
+            var startingNotRed = events.Where(x => !x.IsRedTeam).OrderBy(x => Guid.NewGuid()).Take(k / 2);
+            List<AuthEventTransform> ennSet = new List<AuthEventTransform>();
+
+            var iterationInteral = 1;
+            var iterationInteralAdded = 0;
+            var iterationInteralRemoved = 0;
+
+            foreach (var e in events)
+            {
+                Console.Write($"\rInteral iteration {iterationInteral}, {iterationInteralAdded} added and {iterationInteralRemoved} removed.......\t\t\t");
+
+                if (!e.IsRedTeam)
+                {
+                    var nearestNeighbors = AuthEventTransform.GetNearestNeighbors(e, events.ToArray(), k).ToList();
+                    bool classification = AuthEventTransform.KnnClassify(nearestNeighbors);
+
+                    if (classification != e.IsRedTeam)
+                    {
+                        iterationInteralRemoved++;
+                        continue;
+                    }
+                }
+
+                iterationInteral++;
+                ennSet.Add(e);
+            }
+
+            Console.WriteLine();
+
+            var totalCount = 0;
+            using (StreamWriter sw = File.AppendText(newFileLocation))
+            {
+                foreach (var cnn in ennSet)
+                {
+                    AddRecord(sw, cnn);
+                    PrintProgress(ESampleStrategy.CNN, totalCount++, 0, 0, 0);
+                }
             }
         }
 
@@ -132,15 +257,14 @@ namespace IdsMLNet_Research.Services
             var redTeams = GetAuthEventsFromFile(redTeamFileLocation);
             var allEvents = GetAuthEventsFromFile(eventsFileLocation);
             List<float> rs = new List<float>();
+            float riSum = 0;
 
             foreach (var redTeamEvent in redTeams)
             {
                 float ri = (float)AuthEventTransform.GetNearestNeighbors(redTeamEvent, allEvents, (int)k).Where(x => x.Item2 != 0 && !x.Item1.IsRedTeam).Count() / k;
                 rs.Add(ri);
+                riSum += ri;
             }
-
-            float riSum = 0;
-            foreach (var r in rs) riSum += r;
 
             if (riSum == 0) throw new ArithmeticException();
 

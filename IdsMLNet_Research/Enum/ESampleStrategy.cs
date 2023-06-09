@@ -15,6 +15,7 @@
         RandomUpSample,
         RandomDownSample,
         ADASYN,
-        CNN
+        CNN,
+        ENN
     }
 }
